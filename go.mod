@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/portto/aptos-go-sdk v0.0.0-20220824132358-f6928d163149
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
@@ -12,6 +13,8 @@ require (
 )
 
 require (
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.4 // indirect
 	github.com/jonboulle/clockwork v0.3.0 // indirect

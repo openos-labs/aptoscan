@@ -4,6 +4,7 @@ type ProcessResult struct {
 	Name         string
 	StartVersion uint64
 	EndVersion   uint64
+	Error        error
 }
 
 func NewProcessResult(name string, start, end uint64) *ProcessResult {
