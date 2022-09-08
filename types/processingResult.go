@@ -1,13 +1,13 @@
-package indexer
+package types
 
 type ProcessResult struct {
 	Name         string
-	StartVersion uint64
-	EndVersion   uint64
+	StartVersion int64
+	EndVersion   int64
 	Error        error
 }
 
-func NewProcessResult(name string, start, end uint64) *ProcessResult {
+func NewProcessResult(name string, start, end int64) *ProcessResult {
 	return &ProcessResult{
 		Name:         name,
 		StartVersion: start,

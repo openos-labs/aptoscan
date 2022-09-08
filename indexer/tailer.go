@@ -87,7 +87,7 @@ func (t *Tailor) CheckOrUpdateChainId() error {
 
 func (t *Tailor) AddProcessor(processor *Processor) {
 	t.logger.WithFields(log.Fields{
-		"name": processor.TransactionProcessor.Name(),
+		"name": processor.Name(),
 	}).Info("Adding processor to indexer")
 	t.processors = append(t.processors, processor)
 }
@@ -100,11 +100,11 @@ func (t *Tailor) HandlePreviousErrors() error {
 }
 
 //SetFetcherToLowestProcessorVersion Sets the version of the fetcher to the lowest version among all processors
-func (t *Tailor) SetFetcherToLowestProcessorVersion() (uint64, error) {
-	var lowest uint64
-	lowest = math.MaxUint64
+func (t *Tailor) SetFetcherToLowestProcessorVersion() (int64, error) {
+	var lowest int64
+	lowest = math.MaxInt64
 	for _, processor := range t.processors {
-		maxVersion, err := processor.GetMaxVersion(t.TransactionFetcher.GetChainId())
+		maxVersion, err := processor.getMaxVersion(t.TransactionFetcher.GetChainId())
 		if err != nil {
 			return lowest, err
 		}
@@ -120,37 +120,92 @@ func (t *Tailor) SetFetcherToLowestProcessorVersion() (uint64, error) {
 	return t.SetFetcherVersion(lowest)
 }
 
-func (t *Tailor) SetFetcherVersion(version uint64) (uint64, error) {
+func (t *Tailor) SetFetcherVersion(version int64) (int64, error) {
 	t.TransactionFetcher.SetVersion(version)
 	t.logger.Info(fmt.Sprintf("Will start fetching from version %d", version))
 	return version, nil
 }
 
-func (t *Tailor) ProcessVersion(version uint64) ([]ProcessResult, error) {
+func (t *Tailor) ProcessVersion(version uint64) ([]processResult, error) {
 	tx, err := t.GetTxn(version)
 	if err != nil {
 		return nil, err
 	}
-	return t.ProcessTransactions([]types.Transaction{*tx})
+	return t.ProcessTransactions([]types.Transaction{*tx}), nil
 }
 
-func (t *Tailor) ProcessNextBatch(batchSize uint8) (uint64, [][]ProcessResult, error) {
-	return 0, nil, nil
-}
-
-func (t *Tailor) ProcessTransactions(transactions []types.Transaction) ([]ProcessResult, error) {
+//ProcessNextBatch todo: 这他吗的能并行执行么
+func (t *Tailor) ProcessNextBatch(batchSize uint8, singleFetchTxs int) (uint64, []processResult, error) {
+	txs, err := t.TransactionFetcher.FetchNextBatch(singleFetchTxs)
+	if err != nil {
+		return 0, nil, err
+	}
+	txsAmount := len(txs)
+	singleGoroutineTxAmount := txsAmount / int(batchSize)
+	if singleGoroutineTxAmount < 0 {
+		results := t.ProcessTransactions(txs)
+		return uint64(txsAmount), results, nil
+	}
+	var remainBarch = batchSize
+	resultCh := make(chan []processResult)
 	var wg sync.WaitGroup
-	for _, processor := range t.processors {
+	var results []processResult
+	for i := 0; i < int(batchSize); i++ {
 		wg.Add(1)
-		go func(processor *Processor, txns []types.Transaction) {
+		var txs2Process []types.Transaction
+		if i != int(batchSize)-1 {
+			txs2Process = txs[i*singleGoroutineTxAmount : (i+1)*singleGoroutineTxAmount]
+		} else {
+			txs2Process = txs[i*singleGoroutineTxAmount:]
+		}
+		go func(i int) {
 			defer wg.Done()
-			err := processor.processTransactionsWithStatus(transactions)
+			resultCh <- t.ProcessTransactions(txs2Process)
+		}(i)
+	}
+	for {
+		select {
+		case singleBatchResult := <-resultCh:
+			remainBarch--
+			results = append(results, singleBatchResult...)
+			if remainBarch == 0 {
+				return uint64(txsAmount), results, nil
+			}
+		}
+	}
+}
+
+func (t *Tailor) ProcessTransactions(transactions []types.Transaction) []processResult {
+	var results []processResult
+	resultCh := make(chan processResult)
+	var remainingTasks = len(t.processors)
+	for _, processor := range t.processors {
+		go func(processor *Processor, txns []types.Transaction) {
+			result, err := processor.processTransactionsWithStatus(transactions)
+			resultCh <- processResult{
+				result: *result,
+				error:  err,
+			}
 		}(processor, transactions)
 	}
 
-	return nil, nil
+	for {
+		select {
+		case result := <-resultCh:
+			remainingTasks--
+			results = append(results, result)
+			if remainingTasks == 0 {
+				return results
+			}
+		}
+	}
 }
 
 func (t *Tailor) GetTxn(version uint64) (*types.Transaction, error) {
 	return t.TransactionFetcher.FetchVersion(version)
+}
+
+type processResult struct {
+	result types.ProcessResult
+	error  error
 }

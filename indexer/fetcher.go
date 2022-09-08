@@ -10,14 +10,14 @@ import (
 type Fetcher struct {
 	Client              aptos.API
 	ChainId             uint8
-	StartingVersion     uint64
-	CurrentVersion      uint64
-	HighestKnownVersion uint64
+	StartingVersion     int64
+	CurrentVersion      int64
+	HighestKnownVersion int64
 	//todo:
 	//TransactionsSenders []
 }
 
-func NewFetcher(client aptos.API, currentVersion uint64) *Fetcher {
+func NewFetcher(client aptos.API, currentVersion int64) *Fetcher {
 	//todo:
 	//TransactionsSenders []
 	return &Fetcher{
@@ -37,13 +37,13 @@ func (f *Fetcher) setHighestKnownVersion() error {
 	if err != nil {
 		return err
 	}
-	f.HighestKnownVersion = uint64(version)
+	f.HighestKnownVersion = int64(version)
 	f.ChainId = uint8(res.ChainID)
 	return nil
 }
 
-func (f *Fetcher) FetchNextBatch(batch uint64) ([]types.Transaction, error) {
-	txs, err := f.Client.GetTransactions(int(f.CurrentVersion), int(batch))
+func (f *Fetcher) FetchNextBatch(batch int) ([]types.Transaction, error) {
+	txs, err := f.Client.GetTransactions(int(f.CurrentVersion), batch)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +80,8 @@ func (f *Fetcher) FetchLedgerInfo() (*types.LedgerInfo, error) {
 	return ledgerInfo, nil
 }
 
-func (f *Fetcher) SetVersion(version uint64) {
-	if f.StartingVersion != math.MaxUint64 {
+func (f *Fetcher) SetVersion(version int64) {
+	if f.StartingVersion != math.MaxInt64 {
 		panic("TransactionFetcher already started!")
 	}
 	f.StartingVersion = version
@@ -97,10 +97,10 @@ func (f *Fetcher) Start() {
 }
 
 type TransactionFetcher interface {
-	FetchNextBatch(batch uint64) ([]types.Transaction, error)
+	FetchNextBatch(batch int) ([]types.Transaction, error)
 	FetchVersion(version uint64) (*types.Transaction, error)
 	FetchLedgerInfo() (*types.LedgerInfo, error)
-	SetVersion(version uint64)
+	SetVersion(version int64)
 	GetChainId() uint8
 	Start()
 }
