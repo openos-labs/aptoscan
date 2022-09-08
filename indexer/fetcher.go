@@ -50,7 +50,9 @@ func (f *Fetcher) FetchNextBatch(batch uint64) ([]types.Transaction, error) {
 	var transactions []types.Transaction
 	for _, tx := range txs {
 		transaction := new(types.Transaction)
-		transaction.FromAptos(tx)
+		if err = transaction.FromAptos(tx); err != nil {
+			return nil, err
+		}
 		transactions = append(transactions, *transaction)
 	}
 	return transactions, nil
@@ -62,7 +64,9 @@ func (f *Fetcher) FetchVersion(v uint64) (*types.Transaction, error) {
 		return nil, err
 	}
 	transaction := new(types.Transaction)
-	transaction.FromAptos(*tx)
+	if err = transaction.FromAptos(*tx); err != nil {
+		return nil, err
+	}
 	return transaction, nil
 }
 

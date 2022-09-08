@@ -144,7 +144,7 @@ func (t *Tailor) ProcessTransactions(transactions []types.Transaction) ([]Proces
 		wg.Add(1)
 		go func(processor *Processor, txns []types.Transaction) {
 			defer wg.Done()
-			err := processor.ProcessTransactionsWithStatus(transactions)
+			err := processor.processTransactionsWithStatus(transactions)
 		}(processor, transactions)
 	}
 

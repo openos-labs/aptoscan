@@ -3,6 +3,7 @@ package types
 import (
 	aptos "github.com/portto/aptos-go-sdk/client"
 	"gorm.io/gorm"
+	"strconv"
 	"time"
 )
 
@@ -15,13 +16,13 @@ type Transaction struct {
 	Type      string   `json:"type"`
 	Timestamp string   `json:"timestamp"`
 	Events    []Event  `json:"events"`
-	Version   string   `json:"version"`
+	Version   int64    `json:"version"`
 	Hash      string   `json:"hash"`
 	Success   bool     `json:"success"`
 	Changes   []Change `json:"changes"`
 }
 
-func (transaction *Transaction) FromAptos(tx aptos.TransactionResp) {
+func (transaction *Transaction) FromAptos(tx aptos.TransactionResp) error {
 	code := Code{
 		Bytecode: tx.Payload.Code.Bytecode,
 		ABI:      tx.Payload.Code.ABI,
@@ -81,6 +82,10 @@ func (transaction *Transaction) FromAptos(tx aptos.TransactionResp) {
 			},
 		})
 	}
+	version, err := strconv.ParseInt(tx.Version, 10, 64)
+	if err != nil {
+		return err
+	}
 	*transaction = Transaction{
 		Sender:         tx.Sender,
 		SequenceNumber: tx.SequenceNumber,
@@ -88,11 +93,12 @@ func (transaction *Transaction) FromAptos(tx aptos.TransactionResp) {
 		Type:           tx.Type,
 		Timestamp:      tx.Timestamp,
 		Events:         events,
-		Version:        tx.Version,
+		Version:        version,
 		Hash:           tx.Hash,
 		Success:        tx.Success,
 		Changes:        changes,
 	}
+	return nil
 }
 
 type JSONPayload struct {
