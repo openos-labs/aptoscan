@@ -1,6 +1,9 @@
 package types
 
-import "time"
+import (
+	"gorm.io/gorm"
+	"time"
+)
 
 type ProcessorStatus struct {
 	Name         string
@@ -26,3 +29,11 @@ func (ProcessorStatus) TableName() string {
 //	}
 //	return status
 //}
+
+func AutoCreateProcessorStatusTable(db *gorm.DB) error {
+	err := db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&ProcessorStatus{})
+	if err != nil {
+		return err
+	}
+	return nil
+}

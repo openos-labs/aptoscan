@@ -104,7 +104,7 @@ func (t *Tailor) SetFetcherToLowestProcessorVersion() (int64, error) {
 	var lowest int64
 	lowest = math.MaxInt64
 	for _, processor := range t.processors {
-		maxVersion, err := processor.getMaxVersion(t.TransactionFetcher.GetChainId())
+		maxVersion, err := processor.getMaxVersion()
 		if err != nil {
 			return lowest, err
 		}
@@ -176,17 +176,24 @@ func (t *Tailor) ProcessNextBatch(batchSize uint8, singleFetchTxs int) (uint64, 
 }
 
 func (t *Tailor) ProcessTransactions(transactions []types.Transaction) []processResult {
+	var txs []types.Transaction
+	for _, tx := range transactions {
+		if tx.Success == true {
+			txs = append(txs, tx)
+		}
+	}
+
 	var results []processResult
 	resultCh := make(chan processResult)
 	var remainingTasks = len(t.processors)
 	for _, processor := range t.processors {
-		go func(processor *Processor, txns []types.Transaction) {
-			result, err := processor.processTransactionsWithStatus(transactions)
+		go func(processor *Processor, txs []types.Transaction) {
+			result, err := processor.processTransactionsWithStatus(txs)
 			resultCh <- processResult{
 				result: *result,
 				error:  err,
 			}
-		}(processor, transactions)
+		}(processor, txs)
 	}
 
 	for {

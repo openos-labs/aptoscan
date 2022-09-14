@@ -66,7 +66,7 @@ func (p *Processor) processTransactionsWithStatus(txns []types.Transaction) (*ty
 	if err != nil {
 		return nil, err
 	}
-	if err = p.updateStatus(result); err != nil {
+	if err = p.updateStatus(result, err); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -96,7 +96,7 @@ func (p *Processor) applyProcessorStatus(psms []types.ProcessorStatus) error {
 }
 
 //updateStatus Writes that a version has been completed successfully for this `TransactionProcessor` to the DB
-func (p *Processor) updateStatus(result *types.ProcessResult) error {
+func (p *Processor) updateStatus(result *types.ProcessResult, err error) error {
 	//todo: PROCESSOR_SUCCESSES, PROCESSOR_ERRORS
 	p.GetLogger().WithFields(log.Fields{
 		"name":          p.Name(),
@@ -104,7 +104,7 @@ func (p *Processor) updateStatus(result *types.ProcessResult) error {
 		"end version":   result.EndVersion,
 	}).Debug("marking processing versions started from")
 	var psms []types.ProcessorStatus
-	if result.Error == nil {
+	if err == nil {
 		//psms = types.ProcessorStatusFromVersions(p.Name(), result.StartVersion, result.EndVersion, true, "")
 		psms = []types.ProcessorStatus{{
 			Name:         p.Name(),
@@ -120,7 +120,7 @@ func (p *Processor) updateStatus(result *types.ProcessResult) error {
 			StartVersion: result.StartVersion,
 			EndVersion:   result.EndVersion,
 			Success:      false,
-			Detail:       result.Error.Error(),
+			Detail:       err.Error(),
 		}}
 	}
 	if err := p.setMaxVersion(result.EndVersion); err != nil {
