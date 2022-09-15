@@ -113,6 +113,9 @@ func (p *Processor) updateStatus(result *types.ProcessResult, err error) error {
 			Success:      true,
 			Detail:       "",
 		}}
+		if err := p.setMaxVersion(result.EndVersion); err != nil {
+			return err
+		}
 	} else {
 		//psms = types.ProcessorStatusFromVersions(p.Name(), result.StartVersion, result.EndVersion, false, result.Error.Error())
 		psms = []types.ProcessorStatus{{
@@ -122,9 +125,6 @@ func (p *Processor) updateStatus(result *types.ProcessResult, err error) error {
 			Success:      false,
 			Detail:       err.Error(),
 		}}
-	}
-	if err := p.setMaxVersion(result.EndVersion); err != nil {
-		return err
 	}
 	return p.applyProcessorStatus(psms)
 }

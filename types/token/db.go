@@ -45,7 +45,7 @@ func (MetaDataInDB) TableName() string {
 }
 
 type OwnershipInDB struct {
-	OwnershipId string //todo: 去掉？
+	OwnershipId string
 	TokenId     string `gorm:"column:token_id"`
 	Owner       string `gorm:"column:owner"`
 	Amount      int64
@@ -89,10 +89,11 @@ func (TokenDataInDB) TableName() string {
 type TokenPropertyInDB struct {
 	TokenId         string
 	PreviousTokenId string
-	PropertyKeys    string
-	PropertyValues  string
-	PropertyTypes   string
+	PropertyKeys    []byte
+	PropertyValues  []byte
+	PropertyTypes   []byte
 	Version         int64
+	Timestamp       int64
 
 	CreatedAt *time.Time `gorm:"autoCreateTime"`
 	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
@@ -121,8 +122,8 @@ type TokenTransferEventInDB struct {
 	Version        int64
 	EventKey       string
 	SequenceNumber int64
-	Caller         string
-	To             string
+	TokenSeller    string
+	TokenBuyer     string
 	EventType      string
 	TokenId        string
 	CoinType       string
@@ -142,11 +143,15 @@ type TokenActivityInDB struct {
 	Version        int64
 	EventKey       string
 	SequenceNumber int64
-	Account        string
-	TokenId        string
-	EventType      string
-	Amount         int64
-	Timestamp      int64
+
+	EventType string
+	Amount    int64
+	Timestamp int64
+
+	From    string
+	To      string
+	TokenId string
+	Account string
 
 	CreatedAt *time.Time `gorm:"autoCreateTime"`
 	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
@@ -154,6 +159,23 @@ type TokenActivityInDB struct {
 
 func (TokenActivityInDB) TableName() string {
 	return "token_activitys"
+}
+
+type PendingTransfer struct {
+	PendingId string
+	TokenId   string
+	From      string
+	To        string
+	Version   int64
+	Timestamp int64
+	Amount    int64
+
+	CreatedAt *time.Time `gorm:"autoCreateTime"`
+	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
+}
+
+func (PendingTransfer) TableName() string {
+	return "pending_tokens"
 }
 
 func AutoCreateTokensTable(db *gorm.DB) error {
@@ -186,6 +208,10 @@ func AutoCreateTokensTable(db *gorm.DB) error {
 		return err
 	}
 	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&TokenTransferEventInDB{})
+	if err != nil {
+		return err
+	}
+	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&PendingTransfer{})
 	if err != nil {
 		return err
 	}

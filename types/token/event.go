@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	TypeWithdrawEvent               = "0x3::token::WithdrawEvent"
-	TypeDepositEvent                = "0x3::token::DepositEvent"
+	TypeWithdrawEvent = "0x3::token::WithdrawEvent"
+	TypeDepositEvent  = "0x3::token::DepositEvent"
+
 	TypeCreateTokenDataEvent        = "0x3::token::CreateTokenDataEvent"
 	TypeCollectionCreationEvent     = "0x3::token::CreateCollectionEvent"
 	TypeBurnTokenEvent              = "0x3::token::BurnTokenEvent"
