@@ -66,6 +66,7 @@ func (tp *TokenTransactionProcessor) ProcessTransactions(txs []types.Transaction
 	}
 	if tp.indexTokenUri {
 		//todo: deal with metadata
+
 	}
 	return &types.ProcessResult{
 		Name:         tp.Name(),
@@ -85,8 +86,9 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 	var ownershipIds []string
 	ownershipSet := mapset.NewSet()
 
-	var tokenDataChange map[string]int64
+	var tokenDataChanges []*TokenDataAmountChange
 	var tokenDataChangeIds []string
+	tokenDataChangeSet := mapset.NewSet()
 
 	var pendingTransferIds []string
 	var pendingTransfers []*TokenTransferEvent
@@ -98,7 +100,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 			case token.TypeWithdrawEvent:
 				//todo: 增加withdraw和deposit的event
 				tokenId := event.TokenEventData.(token.WithdrawEvent).Id.ToString()
-
+				tokenDataId := event.TokenEventData.(token.WithdrawEvent).Id.TokenDataId.ToString()
 				ownershipId := fmt.Sprintf("%s::%s,", tokenId, tx.Tx.Sender)
 				if !ownershipSet.Contains(ownershipId) {
 					ownershipSet.Add(ownershipId)
@@ -106,25 +108,27 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 				}
 
 				ownershipChanges = append(ownershipChanges, &token.OwnershipInDB{
-					TokenId: tokenId,
-					Owner:   tx.Tx.Sender,
-					Amount:  -event.TokenEventData.(token.WithdrawEvent).Amount,
-					Version: tx.Tx.Version,
+					TokenId:     tokenId,
+					TokenDataId: tokenDataId,
+					Owner:       tx.Tx.Sender,
+					Amount:      -event.TokenEventData.(token.WithdrawEvent).Amount,
+					Version:     tx.Tx.Version,
 				})
 
 			case token.TypeDepositEvent:
 				tokenId := event.TokenEventData.(token.WithdrawEvent).Id.ToString()
-
+				tokenDataId := event.TokenEventData.(token.WithdrawEvent).Id.TokenDataId.ToString()
 				ownershipId := fmt.Sprintf("%s::%s,", tokenId, tx.Tx.Sender)
 				if !ownershipSet.Contains(ownershipId) {
 					ownershipSet.Add(ownershipId)
 					ownershipIds = append(ownershipIds, ownershipId)
 				}
 				ownershipChanges = append(ownershipChanges, &token.OwnershipInDB{
-					TokenId: tokenId,
-					Owner:   tx.Tx.Sender,
-					Amount:  event.TokenEventData.(token.WithdrawEvent).Amount,
-					Version: tx.Tx.Version,
+					TokenId:     tokenId,
+					TokenDataId: tokenDataId,
+					Owner:       tx.Tx.Sender,
+					Amount:      event.TokenEventData.(token.WithdrawEvent).Amount,
+					Version:     tx.Tx.Version,
 				})
 
 			case token.TypeCreateTokenDataEvent:
@@ -153,11 +157,12 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 					return nil
 				}
 				tokenId := event.TokenEventData.(token.BurnTokenEvent).Id.ToString()
+				tokenDataId := event.TokenEventData.(token.BurnTokenEvent).Id.TokenDataId.ToString()
 				amount := int64(event.TokenEventData.(token.BurnTokenEvent).Amount)
 				tokenActivities = append(tokenActivities, &token.TokenActivityInDB{
 					EventKey:       event.Key,
 					SequenceNumber: sequenceNum,
-					Account:        tx.Tx.Sender,
+					Caller:         tx.Tx.Sender,
 					TokenId:        tokenId,
 					EventType:      event.Type,
 					Amount:         amount,
@@ -165,12 +170,20 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 					Timestamp:      timestamp,
 					From:           tx.Tx.Sender,
 				})
-				if tokenData, ok := tokenDataChange[tokenId]; !ok {
-					tokenDataChange[tokenId] -= amount
-					tokenDataChangeIds = append(tokenDataChangeIds, tokenId)
+				if !tokenDataChangeSet.Contains(tokenDataId) {
+					tokenDataChangeSet.Add(tokenDataId)
+					tokenDataChangeIds = append(tokenDataChangeIds, tokenDataId)
+					tokenDataChanges = append(tokenDataChanges, &TokenDataAmountChange{
+						Amount:      -amount,
+						TokenDataId: tokenDataId,
+						Version:     tx.Tx.Version,
+					})
 				} else {
-					tokenData -= amount
-					tokenDataChange[tokenId] = tokenData
+					tokenDataChanges = append(tokenDataChanges, &TokenDataAmountChange{
+						Amount:      -amount,
+						TokenDataId: tokenDataId,
+						Version:     tx.Tx.Version,
+					})
 				}
 
 			case token.TypeMutateTokenPropertyMapEvent:
@@ -185,25 +198,34 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 					return err
 				}
 				tokenId := event.TokenEventData.(token.BurnTokenEvent).Id.ToString()
+				tokenDataId := event.TokenEventData.(token.BurnTokenEvent).Id.TokenDataId.ToString()
+
 				amount := int64(event.TokenEventData.(token.BurnTokenEvent).Amount)
 				tokenActivities = append(tokenActivities, &token.TokenActivityInDB{
 					EventKey:       event.Key,
 					SequenceNumber: sequenceNum,
-					Account:        tx.Tx.Sender,
+					Caller:         tx.Tx.Sender,
 					TokenId:        tokenId,
 					EventType:      event.Type,
 					Amount:         amount,
 					Version:        tx.Tx.Version,
 					Timestamp:      0,
-					To:             tx.Tx.Sender,
+					//To:             tx.Tx.Sender,
 				})
-				if tokenData, ok := tokenDataChange[tokenId]; !ok {
-					tokenDataChange[tokenId] -= amount
-					tokenDataChangeIds = append(tokenDataChangeIds, tokenId)
-
+				if !tokenDataChangeSet.Contains(tokenDataId) {
+					tokenDataChangeSet.Add(tokenDataId)
+					tokenDataChangeIds = append(tokenDataChangeIds, tokenDataId)
+					tokenDataChanges = append(tokenDataChanges, &TokenDataAmountChange{
+						Amount:      amount,
+						TokenDataId: tokenDataId,
+						Version:     tx.Tx.Version,
+					})
 				} else {
-					tokenData += amount
-					tokenDataChange[tokenId] = tokenData
+					tokenDataChanges = append(tokenDataChanges, &TokenDataAmountChange{
+						Amount:      amount,
+						TokenDataId: tokenDataId,
+						Version:     tx.Tx.Version,
+					})
 				}
 
 			case token.TypeTokenListingEvent:
@@ -239,7 +261,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 				if err != nil {
 					return err
 				}
-				timestampe, err := strconv.ParseInt(tx.Tx.Timestamp, 10, 64)
+				timestamp, err := strconv.ParseInt(tx.Tx.Timestamp, 10, 64)
 				if err != nil {
 					return nil
 				}
@@ -249,12 +271,12 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 				tokenActivities = append(tokenActivities, &token.TokenActivityInDB{
 					EventKey:       event.Key,
 					SequenceNumber: sequenceNum,
-					Account:        tx.Tx.Sender,
+					Caller:         tx.Tx.Sender,
 					TokenId:        tokenId,
 					EventType:      event.Type,
 					Amount:         amount,
 					Version:        tx.Tx.Version,
-					Timestamp:      timestampe,
+					Timestamp:      timestamp,
 
 					From: tx.Tx.Sender,
 					To:   to,
@@ -265,7 +287,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 					To:        to,
 					Amount:    amount,
 					Version:   tx.Tx.Version,
-					Timestamp: timestampe,
+					Timestamp: timestamp,
 				}
 
 				pendingId := tokenTransferEvent.GetId()
@@ -280,7 +302,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 				if err != nil {
 					return err
 				}
-				timestampe, err := strconv.ParseInt(tx.Tx.Timestamp, 10, 64)
+				timestamp, err := strconv.ParseInt(tx.Tx.Timestamp, 10, 64)
 				if err != nil {
 					return nil
 				}
@@ -290,12 +312,12 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 				tokenActivities = append(tokenActivities, &token.TokenActivityInDB{
 					EventKey:       event.Key,
 					SequenceNumber: sequenceNum,
-					Account:        tx.Tx.Sender,
+					Caller:         tx.Tx.Sender,
 					TokenId:        tokenId,
 					EventType:      event.Type,
 					Amount:         amount,
 					Version:        tx.Tx.Version,
-					Timestamp:      timestampe,
+					Timestamp:      timestamp,
 
 					From: from,
 					To:   tx.Tx.Sender,
@@ -306,7 +328,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 					To:        tx.Tx.Sender,
 					Amount:    -amount,
 					Version:   tx.Tx.Version,
-					Timestamp: timestampe,
+					Timestamp: timestamp,
 				}
 
 				pendingId := tokenTransferEvent.GetId()
@@ -321,7 +343,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 				if err != nil {
 					return err
 				}
-				timestampe, err := strconv.ParseInt(tx.Tx.Timestamp, 10, 64)
+				timestamp, err := strconv.ParseInt(tx.Tx.Timestamp, 10, 64)
 				if err != nil {
 					return nil
 				}
@@ -331,12 +353,12 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 				tokenActivities = append(tokenActivities, &token.TokenActivityInDB{
 					EventKey:       event.Key,
 					SequenceNumber: sequenceNum,
-					Account:        tx.Tx.Sender,
+					Caller:         tx.Tx.Sender,
 					TokenId:        tokenId,
 					EventType:      event.Type,
 					Amount:         amount,
 					Version:        tx.Tx.Version,
-					Timestamp:      timestampe,
+					Timestamp:      timestamp,
 
 					From: tx.Tx.Sender,
 					To:   to,
@@ -347,7 +369,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 					To:        to,
 					Amount:    -amount,
 					Version:   tx.Tx.Version,
-					Timestamp: timestampe,
+					Timestamp: timestamp,
 				}
 
 				pendingId := tokenTransferEvent.GetId()
@@ -383,7 +405,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 		return nil
 	}
 
-	if err := dealWithTokenDataChanges(db, tokenDataChange, tokenDataChangeIds); err != nil {
+	if err := dealWithTokenDataChanges(db, tokenDataChanges, tokenDataChangeIds); err != nil {
 		return nil
 	}
 
@@ -471,34 +493,176 @@ func insertTokenProperties(db *gorm.DB, event token.MutateTokenPropertyMapEvent,
 		return err
 	}
 
-	types, err := event.Types.Marshal()
+	_types, err := event.Types.Marshal()
 
-	timestampe, err := strconv.ParseInt(tx.Timestamp, 10, 64)
+	timestamp, err := strconv.ParseInt(tx.Timestamp, 10, 64)
 	if err != nil {
 		return nil
+
+	}
+	oldTokenId := event.OldId.ToString()
+	newTokenId := event.NewID.ToString()
+	if oldTokenId != newTokenId {
+		var oldOwnerships []*token.OwnershipInDB
+		var newOwnerships []*token.OwnershipInDB
+
+		if err := db.Where("token_id = ?", oldTokenId).Find(&oldOwnerships).Error; err != nil {
+			return err
+		}
+
+		for _, oldOwnership := range oldOwnerships {
+			newOwnership := &token.OwnershipInDB{
+				OwnershipId: fmt.Sprintf("%s::%s,", newTokenId, oldOwnership.OwnershipId),
+				TokenId:     newTokenId,
+				TokenDataId: oldOwnership.TokenDataId,
+				Owner:       oldOwnership.Owner,
+				Amount:      oldOwnership.Amount,
+			}
+			oldOwnership.Version = tx.Version
+			oldOwnership.Amount = 0
+			newOwnerships = append(newOwnerships, newOwnership)
+		}
+		if err := db.Save(&oldOwnerships).Error; err != nil {
+			return err
+		}
+
+		if err := db.Save(&newOwnerships).Error; err != nil {
+			return err
+		}
 	}
 
 	var tokenProperty = token.TokenPropertyInDB{
-		TokenId:         event.NewID.ToString(),
-		PreviousTokenId: event.OldId.ToString(),
+		TokenId:         oldTokenId,
+		PreviousTokenId: newTokenId,
 		PropertyKeys:    keys,
 		PropertyValues:  values,
-		PropertyTypes:   types,
+		PropertyTypes:   _types,
 		Version:         tx.Version,
-		Timestamp:       timestampe,
+		Timestamp:       timestamp,
 	}
 
 	return db.Save(&tokenProperty).Error
 }
 
 func dealWithOwnerShips(db *gorm.DB, ownershipChanges []*token.OwnershipInDB, ownershipIds []string) error {
-	return nil
+	var ownerShipsInDb []*token.OwnershipInDB
+	if err := db.Where("OwnershipId IN (?)", ownershipIds).Find(&ownerShipsInDb).Error; err != nil {
+		return err
+	}
+	ownerShipInDbMap := make(map[string]*token.OwnershipInDB)
+	for _, ownership := range ownerShipsInDb {
+		ownerShipInDbMap[ownership.OwnershipId] = ownership
+	}
+
+	for _, ownership := range ownershipChanges {
+		if ownershipInDb, ok := ownerShipInDbMap[ownership.OwnershipId]; ok {
+			if ownershipInDb.Version >= ownership.Version {
+				continue
+			}
+			ownershipInDb.Amount += ownership.Amount
+			ownershipInDb.Version = ownership.Version
+		} else {
+			ownerShipInDbMap[ownership.OwnershipId] = ownership
+		}
+	}
+
+	var newOwnerships []*token.OwnershipInDB
+	for _, ownership := range newOwnerships {
+		newOwnerships = append(newOwnerships, ownership)
+	}
+
+	return db.Save(&newOwnerships).Error
 }
 
-func dealWithTokenDataChanges(db *gorm.DB, tokenDataChange map[string]int64, tokenDataChangeIds []string) error {
-	return nil
+func dealWithTokenDataChanges(db *gorm.DB, tokenDataChanges []*TokenDataAmountChange, tokenDataChangeIds []string) error {
+	var tokenDatasInDb []*token.TokenDataInDB
+	if err := db.Where("token_data_id IN (?)", tokenDataChangeIds).Find(&tokenDatasInDb).Error; err != nil {
+		return err
+	}
+
+	tokenDataInDbMap := make(map[string]*token.TokenDataInDB)
+	for _, tokenDataInDb := range tokenDatasInDb {
+		tokenDataInDbMap[tokenDataInDb.TokenDataId] = tokenDataInDb
+	}
+
+	for _, tokenDataAmountChange := range tokenDataChanges {
+		if tokenDataInDb, ok := tokenDataInDbMap[tokenDataAmountChange.TokenDataId]; ok {
+			if tokenDataInDb.Version >= tokenDataAmountChange.Version {
+				continue
+			}
+			tokenDataInDb.Supply += tokenDataAmountChange.Amount
+			tokenDataInDb.Version = tokenDataAmountChange.Version
+			if tokenDataInDb.Supply < 0 {
+				return fmt.Errorf("version:%d,tokenId:%s:creator:%s,collection:%s,token:%s supply less than 0", tokenDataAmountChange.Version, tokenDataInDb.TokenDataId, tokenDataInDb.Creator, tokenDataInDb.Collection, tokenDataInDb.Name)
+			}
+
+		} else {
+			return fmt.Errorf("version:%d,tokenId:%s:creator:%s,collection:%s,token:%s; mint or burn un-created token", tokenDataAmountChange.Version, tokenDataInDb.TokenDataId, tokenDataInDb.Creator, tokenDataInDb.Collection, tokenDataInDb.Name)
+
+		}
+	}
+
+	var newTokensData []*token.TokenDataInDB
+	for _, tokenData := range tokenDataInDbMap {
+		newTokensData = append(newTokensData, tokenData)
+	}
+
+	return db.Save(&newTokensData).Error
 }
 
 func dealWithPendingTransfers(db *gorm.DB, pendingTransfers []*TokenTransferEvent, pendingTransferIds []string) error {
-	return nil
+	var pendingTransfersInDb []*token.PendingTransfer
+	if err := db.Where("pending_id IN (?)", pendingTransferIds).Find(&pendingTransfersInDb).Error; err != nil {
+		return err
+	}
+	pendingTransferInDbMap := make(map[string]*token.PendingTransfer)
+	for _, pendingTransferInDb := range pendingTransfersInDb {
+		pendingId := pendingTransferInDb.PendingId
+		pendingTransferInDbMap[pendingId] = &token.PendingTransfer{
+			PendingId: pendingId,
+			TokenId:   pendingTransferInDb.TokenId,
+			From:      pendingTransferInDb.From,
+			To:        pendingTransferInDb.To,
+			Version:   pendingTransferInDb.Version,
+			Timestamp: pendingTransferInDb.Timestamp,
+			Amount:    pendingTransferInDb.Amount,
+		}
+	}
+
+	for _, pendingTransfer := range pendingTransfers {
+		if pendingTransferInDb, ok := pendingTransferInDbMap[pendingTransfer.Id]; ok {
+			if pendingTransferInDb.Version >= pendingTransfer.Version {
+				continue
+			}
+
+			pendingTransferInDb.Amount += pendingTransfer.Amount
+			pendingTransferInDb.Version = pendingTransfer.Version
+			if pendingTransferInDb.Amount < 0 {
+				return fmt.Errorf("version%d, pending transfer id : %s, pending transfer amount should > 0", pendingTransfer.Version, pendingTransfer.Id)
+			}
+		} else {
+			if pendingTransfer.Amount < 0 {
+				return fmt.Errorf("version%d, pending transfer id : %s, pending transfer amount should > 0", pendingTransfer.Version, pendingTransfer.Id)
+			}
+			pendingTransferInDbMap[pendingTransfer.Id] = &token.PendingTransfer{
+				PendingId: pendingTransfer.GetId(),
+				TokenId:   pendingTransfer.TokenId,
+				From:      pendingTransfer.From,
+				To:        pendingTransfer.To,
+				Version:   pendingTransfer.Version,
+				Timestamp: pendingTransfer.Timestamp,
+				Amount:    pendingTransfer.Amount,
+			}
+		}
+	}
+
+	var newPendingToken []*token.PendingTransfer
+	for _, pendingToken := range pendingTransferInDbMap {
+		newPendingToken = append(newPendingToken, pendingToken)
+	}
+	return db.Save(&newPendingToken).Error
+}
+
+func getAllMetadata() ([]token.MetaDataInDB, error) {
+
 }

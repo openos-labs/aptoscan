@@ -25,3 +25,9 @@ func (t *TokenTransferEvent) GetId() string {
 	t.Id = id
 	return id
 }
+
+type TokenDataAmountChange struct {
+	Amount      int64
+	TokenDataId string
+	Version     int64
+}

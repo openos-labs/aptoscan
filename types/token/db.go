@@ -47,6 +47,7 @@ func (MetaDataInDB) TableName() string {
 type OwnershipInDB struct {
 	OwnershipId string
 	TokenId     string `gorm:"column:token_id"`
+	TokenDataId string `gorm:"column:token_data_id"`
 	Owner       string `gorm:"column:owner"`
 	Amount      int64
 	Version     int64
@@ -60,7 +61,7 @@ func (OwnershipInDB) TableName() string {
 }
 
 type TokenDataInDB struct {
-	TokenDataId              string
+	TokenDataId              string `gorm:"column:token_data_id"`
 	Creator                  string
 	Collection               string
 	Name                     string
@@ -151,7 +152,7 @@ type TokenActivityInDB struct {
 	From    string
 	To      string
 	TokenId string
-	Account string
+	Caller  string
 
 	CreatedAt *time.Time `gorm:"autoCreateTime"`
 	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
@@ -162,7 +163,7 @@ func (TokenActivityInDB) TableName() string {
 }
 
 type PendingTransfer struct {
-	PendingId string
+	PendingId string `gorm:"column:pending_id"`
 	TokenId   string
 	From      string
 	To        string
