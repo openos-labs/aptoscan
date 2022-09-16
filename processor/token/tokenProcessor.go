@@ -7,7 +7,9 @@ import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/go-redis/redis/v8"
+	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"net/http"
 	"strconv"
 )
 
@@ -663,6 +665,47 @@ func dealWithPendingTransfers(db *gorm.DB, pendingTransfers []*TokenTransferEven
 	return db.Save(&newPendingToken).Error
 }
 
-func getAllMetadata() ([]token.MetaDataInDB, error) {
+func getAllMetadata(c *http.Client, uris map[string]string, logger *logger.Logger) []*token.MetaDataInDB {
+	var metadatas []*token.MetaDataInDB
+	for tokenId, uri := range uris {
+		metadata := getMetadata(c, tokenId, uri, logger)
+		if metadata != nil {
+			attributes, err := metadata.Attributes.Marshal()
+			if err != nil {
+				logger.WithFields(log.Fields{
+					"error":   err,
+					"uri":     uri,
+					"tokenId": tokenId,
+					"type":    ARWEAVE,
+				}).Error("can not get marshal attributes")
+				continue
+			}
 
+			properties, err := metadata.Properties.Marshal()
+			if err != nil {
+				logger.WithFields(log.Fields{
+					"error":   err,
+					"uri":     uri,
+					"tokenId": tokenId,
+					"type":    ARWEAVE,
+				}).Error("can not get marshal properties")
+				continue
+			}
+			metadatas = append(metadatas, &token.MetaDataInDB{
+				TokenId:              tokenId,
+				Name:                 metadata.Name,
+				Symbol:               metadata.Symbol,
+				SellerFeeBasisPoints: metadata.SellerFeeBasisPoints,
+				Description:          metadata.Description,
+				Image:                metadata.Image,
+				ExternalUrl:          metadata.ExternalUrl,
+				AnimationUrl:         metadata.AnimationUrl,
+				Attributes:           attributes,
+				Properties:           properties,
+				CreatedAt:            nil,
+				UpdatedAt:            nil,
+			})
+		}
+	}
+	return metadatas
 }

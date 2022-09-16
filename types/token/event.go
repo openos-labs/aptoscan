@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/the729/lcs"
+	"strconv"
 )
 
 const (
@@ -128,6 +129,9 @@ func (MintTokenEvent) EventType() string {
 	return TypeMintTokenEvent
 }
 
+type CreateTokenDataEventRaw struct {
+}
+
 type CreateTokenDataEvent struct {
 	Id                       TokenDataId `json:"id"`
 	Description              string      `json:"description"`
@@ -145,6 +149,25 @@ type CreateTokenDataEvent struct {
 
 func (CreateTokenDataEvent) EventType() string {
 	return TypeCreateTokenDataEvent
+}
+
+type CollectionCreationEventRaw struct {
+	Creator        string `json:"creator"`
+	CollectionName string `json:"collection_name"`
+	Uri            string `json:"uri"`
+	Description    string `json:"description"`
+	Maximum        string `json:"maximum"`
+}
+
+func (c CollectionCreationEventRaw) GetEvent() CollectionCreationEvent {
+	maximum, _ := strconv.ParseUint(c.Maximum, 10, 64)
+	return CollectionCreationEvent{
+		Creator:        c.Creator,
+		CollectionName: c.CollectionName,
+		Uri:            c.Uri,
+		Description:    c.Description,
+		Maximum:        maximum,
+	}
 }
 
 type CollectionCreationEvent struct {
