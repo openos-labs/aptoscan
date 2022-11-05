@@ -5,21 +5,42 @@ import (
 	"time"
 )
 
-type CollectionInDB struct {
-	CollectionId string
-	Creator      string
-	Name         string
-	Description  string
-	MaxAmount    int64
-	Uri          string
-	InsertAt     int64
-	Version      int64
+type Token struct {
+	CreatorAddress     string
+	CollectionNameHash string
+	NameHash           string
+	CollectionName     string
+	Name               string
+	PropertyVersion    int64
+	TransactionVersion int64
+	TokenProperties    []byte
 
 	CreatedAt *time.Time `gorm:"autoCreateTime"`
 	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
 }
 
-func (CollectionInDB) TableName() string {
+func (Token) TableName() string {
+	return "tokens"
+}
+
+type CollectionData struct {
+	CreatorAddress     string
+	CollectionNameHash string
+	CollectionName     string
+	Description        string
+	TransactionVersion int64
+	MetadataUri        string
+	Supply             int64
+	Maximum            int64
+	MaximumMutable     bool
+	UriMutable         bool
+	DescriptionMutable bool
+
+	CreatedAt *time.Time `gorm:"autoCreateTime"`
+	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
+}
+
+func (CollectionData) TableName() string {
 	return "collections"
 }
 
@@ -44,50 +65,59 @@ func (MetaDataInDB) TableName() string {
 	return "metadatas"
 }
 
-type OwnershipInDB struct {
-	OwnershipId string
-	TokenId     string `gorm:"column:token_id"`
-	TokenDataId string `gorm:"column:token_data_id"`
-	Owner       string `gorm:"column:owner"`
-	Amount      int64
-	Version     int64
+type Ownership struct {
+	CreatorAddress     string
+	CollectionNameHash string
+	NameHash           string
+	CollectionName     string
+	Name               string
+	PropertyVersion    int64
+	TransactionVersion int64
+	OwnerAddress       string
+	Amount             int64
+	TableHandle        string
+	TableType          string
 
 	CreatedAt *time.Time `gorm:"autoCreateTime"`
 	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
 }
 
-func (OwnershipInDB) TableName() string {
+func (Ownership) TableName() string {
 	return "ownerships"
 }
 
-type TokenDataInDB struct {
-	TokenDataId              string `gorm:"column:token_data_id"`
-	Creator                  string
-	Collection               string
-	Name                     string
-	Description              string
-	MaxAmount                int64
-	Supply                   int64
-	Uri                      string
-	RoyaltyPayeeAddress      string
+type TokenData struct {
+	CreatorAddress         string
+	CollectionNameHash     string
+	NameHash               string
+	CollectionName         string
+	Name                   string
+	TransactionVersion     int64
+	Maximum                int64
+	Supply                 int64
+	LargestPropertyVersion int64
+	MetadataUri            string
+
+	PayeeAddress             string
 	RoyaltyPointsDenominator int64
 	RoyaltyPointsNumerator   int64
-	PropertyKey              []byte
-	PropertyValues           []byte
-	PropertyTypes            []byte
-	MintedAt                 int64
-	LastMintedAt             int64
-	Version                  int64
+
+	MaximumMutable     bool
+	UriMutable         bool
+	DescriptionMutable bool
+	PropertiesMutable  bool
+	RoyaltyMutable     bool
+	DefaultProperties  []byte
 
 	CreatedAt *time.Time `gorm:"autoCreateTime"`
 	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
 }
 
-func (TokenDataInDB) TableName() string {
+func (TokenData) TableName() string {
 	return "token_datas"
 }
 
-type TokenPropertyInDB struct {
+type TokenProperty struct {
 	TokenId         string
 	PreviousTokenId string
 	PropertyKeys    []byte
@@ -100,24 +130,20 @@ type TokenPropertyInDB struct {
 	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
 }
 
-func (TokenPropertyInDB) TableName() string {
+func (TokenProperty) TableName() string {
 	return "token_propertys"
 }
 
-type EventInDB struct {
-	TransactionHash string
-	Key             string
-	SequenceNumber  int64
-	Type            string
-	Data            []byte
-
-	CreatedAt *time.Time `gorm:"autoCreateTime"`
-	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
-}
-
-func (EventInDB) TableName() string {
-	return "events"
-}
+//type EventInDB struct {
+//	TransactionHash string
+//	Key             string
+//	SequenceNumber  int64
+//	Type            string
+//	Data            []byte
+//
+//	CreatedAt *time.Time `gorm:"autoCreateTime"`
+//	UpdatedAt *time.Time `gorm:"autoUpdateTime;not null"`
+//}
 
 type TokenTransferEventInDB struct {
 	Version        int64
@@ -180,7 +206,7 @@ func (PendingTransfer) TableName() string {
 }
 
 func AutoCreateTokensTable(db *gorm.DB) error {
-	err := db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&CollectionInDB{})
+	err := db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&CollectionData{})
 	if err != nil {
 		return err
 	}
@@ -188,19 +214,15 @@ func AutoCreateTokensTable(db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
-	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&OwnershipInDB{})
+	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&Ownership{})
 	if err != nil {
 		return err
 	}
-	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&TokenDataInDB{})
+	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&TokenData{})
 	if err != nil {
 		return err
 	}
-	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&TokenPropertyInDB{})
-	if err != nil {
-		return err
-	}
-	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&EventInDB{})
+	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&TokenProperty{})
 	if err != nil {
 		return err
 	}
@@ -213,6 +235,10 @@ func AutoCreateTokensTable(db *gorm.DB) error {
 		return err
 	}
 	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&PendingTransfer{})
+	if err != nil {
+		return err
+	}
+	err = db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").AutoMigrate(&Token{})
 	if err != nil {
 		return err
 	}

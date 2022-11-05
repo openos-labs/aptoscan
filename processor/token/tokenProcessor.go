@@ -79,12 +79,12 @@ func (tp *TokenTransactionProcessor) ProcessTransactions(txs []types.Transaction
 
 //processTokenOnChainData todo: add logic
 func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWithTokenEvents, uris *map[string]string) error {
-	var collections []*token.CollectionInDB
-	var tokensData []*token.TokenDataInDB
+	var collections []*token.CollectionData
+	var tokensData []*token.TokenData
 	var tokenTransferEvents []*token.TokenTransferEventInDB
 	var tokenActivities []*token.TokenActivityInDB
 
-	var ownershipChanges []*token.OwnershipInDB
+	var ownershipChanges []*token.Ownership
 	var ownershipIds []string
 	ownershipSet := mapset.NewSet()
 
@@ -109,7 +109,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 					ownershipIds = append(ownershipIds, ownershipId)
 				}
 
-				ownershipChanges = append(ownershipChanges, &token.OwnershipInDB{
+				ownershipChanges = append(ownershipChanges, &token.Ownership{
 					TokenId:     tokenId,
 					TokenDataId: tokenDataId,
 					Owner:       tx.Tx.Sender,
@@ -125,7 +125,7 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 					ownershipSet.Add(ownershipId)
 					ownershipIds = append(ownershipIds, ownershipId)
 				}
-				ownershipChanges = append(ownershipChanges, &token.OwnershipInDB{
+				ownershipChanges = append(ownershipChanges, &token.Ownership{
 					TokenId:     tokenId,
 					TokenDataId: tokenDataId,
 					Owner:       tx.Tx.Sender,
@@ -417,12 +417,12 @@ func processTokenOnChainData(db *gorm.DB, txsWithEvents []*token.TransactionWith
 	return nil
 }
 
-func getCollection(event token.CollectionCreationEvent, tx *types.Transaction) (*token.CollectionInDB, error) {
+func getCollection(event token.CollectionCreationEvent, tx *types.Transaction) (*token.CollectionData, error) {
 	timestamp, err := strconv.ParseInt(tx.Timestamp, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	collection := &token.CollectionInDB{
+	collection := &token.CollectionData{
 		CollectionId: fmt.Sprintf("%s:%s", event.Creator, event.CollectionName),
 		Creator:      event.Creator,
 		Name:         event.CollectionName,
@@ -436,7 +436,7 @@ func getCollection(event token.CollectionCreationEvent, tx *types.Transaction) (
 	return collection, err
 }
 
-func getTokenData(event token.CreateTokenDataEvent, tx *types.Transaction) (*token.TokenDataInDB, error) {
+func getTokenData(event token.CreateTokenDataEvent, tx *types.Transaction) (*token.TokenData, error) {
 	timestamp, err := strconv.ParseInt(tx.Timestamp, 10, 64)
 	if err != nil {
 		return nil, err
@@ -460,7 +460,7 @@ func getTokenData(event token.CreateTokenDataEvent, tx *types.Transaction) (*tok
 		return nil, err
 	}
 
-	tokenData := &token.TokenDataInDB{
+	tokenData := &token.TokenData{
 		TokenDataId:              event.Id.ToString(),
 		Creator:                  event.Id.Creator,
 		Collection:               event.Id.Collection,
@@ -505,15 +505,15 @@ func insertTokenProperties(db *gorm.DB, event token.MutateTokenPropertyMapEvent,
 	oldTokenId := event.OldId.ToString()
 	newTokenId := event.NewID.ToString()
 	if oldTokenId != newTokenId {
-		var oldOwnerships []*token.OwnershipInDB
-		var newOwnerships []*token.OwnershipInDB
+		var oldOwnerships []*token.Ownership
+		var newOwnerships []*token.Ownership
 
 		if err := db.Where("token_id = ?", oldTokenId).Find(&oldOwnerships).Error; err != nil {
 			return err
 		}
 
 		for _, oldOwnership := range oldOwnerships {
-			newOwnership := &token.OwnershipInDB{
+			newOwnership := &token.Ownership{
 				OwnershipId: fmt.Sprintf("%s::%s,", newTokenId, oldOwnership.OwnershipId),
 				TokenId:     newTokenId,
 				TokenDataId: oldOwnership.TokenDataId,
@@ -533,7 +533,7 @@ func insertTokenProperties(db *gorm.DB, event token.MutateTokenPropertyMapEvent,
 		}
 	}
 
-	var tokenProperty = token.TokenPropertyInDB{
+	var tokenProperty = token.TokenProperty{
 		TokenId:         oldTokenId,
 		PreviousTokenId: newTokenId,
 		PropertyKeys:    keys,
@@ -546,12 +546,12 @@ func insertTokenProperties(db *gorm.DB, event token.MutateTokenPropertyMapEvent,
 	return db.Save(&tokenProperty).Error
 }
 
-func dealWithOwnerShips(db *gorm.DB, ownershipChanges []*token.OwnershipInDB, ownershipIds []string) error {
-	var ownerShipsInDb []*token.OwnershipInDB
+func dealWithOwnerShips(db *gorm.DB, ownershipChanges []*token.Ownership, ownershipIds []string) error {
+	var ownerShipsInDb []*token.Ownership
 	if err := db.Where("OwnershipId IN (?)", ownershipIds).Find(&ownerShipsInDb).Error; err != nil {
 		return err
 	}
-	ownerShipInDbMap := make(map[string]*token.OwnershipInDB)
+	ownerShipInDbMap := make(map[string]*token.Ownership)
 	for _, ownership := range ownerShipsInDb {
 		ownerShipInDbMap[ownership.OwnershipId] = ownership
 	}
@@ -568,7 +568,7 @@ func dealWithOwnerShips(db *gorm.DB, ownershipChanges []*token.OwnershipInDB, ow
 		}
 	}
 
-	var newOwnerships []*token.OwnershipInDB
+	var newOwnerships []*token.Ownership
 	for _, ownership := range newOwnerships {
 		newOwnerships = append(newOwnerships, ownership)
 	}
@@ -577,12 +577,12 @@ func dealWithOwnerShips(db *gorm.DB, ownershipChanges []*token.OwnershipInDB, ow
 }
 
 func dealWithTokenDataChanges(db *gorm.DB, tokenDataChanges []*TokenDataAmountChange, tokenDataChangeIds []string) error {
-	var tokenDatasInDb []*token.TokenDataInDB
+	var tokenDatasInDb []*token.TokenData
 	if err := db.Where("token_data_id IN (?)", tokenDataChangeIds).Find(&tokenDatasInDb).Error; err != nil {
 		return err
 	}
 
-	tokenDataInDbMap := make(map[string]*token.TokenDataInDB)
+	tokenDataInDbMap := make(map[string]*token.TokenData)
 	for _, tokenDataInDb := range tokenDatasInDb {
 		tokenDataInDbMap[tokenDataInDb.TokenDataId] = tokenDataInDb
 	}
@@ -604,7 +604,7 @@ func dealWithTokenDataChanges(db *gorm.DB, tokenDataChanges []*TokenDataAmountCh
 		}
 	}
 
-	var newTokensData []*token.TokenDataInDB
+	var newTokensData []*token.TokenData
 	for _, tokenData := range tokenDataInDbMap {
 		newTokensData = append(newTokensData, tokenData)
 	}

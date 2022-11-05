@@ -232,16 +232,3 @@ var _ = lcs.RegisterEnum(
 	(*TokenClaimEvent)(nil),
 	(*TokenCancelOfferEvent)(nil),
 )
-
-//var TokenEventSet mapset.Set
-//
-//func Init() {
-//	TokenEventSet = mapset.NewSet()
-//	TokenEventSet.Add(TypeWithdrawEvent)
-//	TokenEventSet.Add(TypeDepositEvent)
-//	TokenEventSet.Add(TypeCreateTokenDataEvent)
-//	TokenEventSet.Add(TypeCollectionCreationEvent)
-//	TokenEventSet.Add(TypeBurnTokenEvent)
-//	TokenEventSet.Add(TypeMutateTokenPropertyMapEvent)
-//	TokenEventSet.Add(TypeMintTokenEvent)
-//}
